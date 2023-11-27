@@ -1,9 +1,12 @@
 package main
 
 import (
+	"imgKeeper/internal/app"
 	"imgKeeper/internal/config"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 const (
@@ -17,7 +20,22 @@ func main() {
 
 	logger := setupLogger(cfg.Env)
 
-	logger.Info(cfg.StoragePath)
+	application := app.New(logger, cfg.GRPC.Port, cfg.StoragePath)
+
+	go func() {
+		application.GRPCServer.MustRun()
+	}()
+
+	// Graceful shutdown
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+
+	<-stop
+
+	application.GRPCServer.Stop()
+	logger.Info("Gracefully stopped")
+
 }
 
 func setupLogger(env string) *slog.Logger {
