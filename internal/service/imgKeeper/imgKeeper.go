@@ -49,14 +49,14 @@ func (s ImgKeeper) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error
 
 	myFile := file.New()
 	var fileSize uint32
-	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer func() {
 		cancel()
 		if err := myFile.OutputFile.Close(); err != nil {
 			s.log.Error("failed to close file", sl.Err(err))
 		}
 	}()
-	for { //TODO: handle case when file already exist
+	for {
 		req, err := stream.Recv()
 		if myFile.FilePath == "" {
 			if err := myFile.SetFile(req.GetFileName(), s.fileIndex.GetFolder()); err != nil {
@@ -78,13 +78,13 @@ func (s ImgKeeper) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error
 		}
 	}
 	fileName := filepath.Base(myFile.FilePath)
-
 	fileCreateDate, fileUpdateDate, err := s.fileIndex.IndexFile(ctxWithTimeout, fileName)
 	if err != nil {
+		s.log.Error("could not index file: ", err)
 		return err
 	}
 
-	s.log.Debug(fmt.Sprintf("saved file: %s, size: %d, CreateTime: %s, updateTime: %s", fileName, fileSize, fileCreateDate, fileUpdateDate))
+	s.log.Debug(fmt.Sprintf("saved file: %s, size: %d, CreateTime: %v, updateTime: %v", myFile.FilePath, fileSize, fileCreateDate, fileUpdateDate))
 	return stream.SendAndClose(&imgKeeperv1.ImgUploadRes{FileName: fileName, Size: fileSize})
 }
 
