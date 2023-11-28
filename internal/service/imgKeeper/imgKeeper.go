@@ -44,6 +44,7 @@ func New(
 }
 
 func (s ImgKeeper) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error {
+
 	const fn = "service.imgKeeper.imgKeeper.UploadImg"
 	s.log.With(slog.String("fn", fn))
 

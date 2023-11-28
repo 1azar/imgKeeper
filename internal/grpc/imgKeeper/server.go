@@ -15,17 +15,26 @@ type ImgKeeper interface {
 
 type serverAPI struct {
 	imgKeeperv1.UnimplementedImgKeeperServer
-	imgKeeper ImgKeeper
+	imgKeeper   ImgKeeper
+	FileLimiter chan struct{} // ограничитель на скачивание/загрузку
+	ListLimiter chan struct{} // ограничитель на просмотр списка файлов
 }
 
 func Register(gRPCServer *grpc.Server, imgKeeper ImgKeeper) {
-	imgKeeperv1.RegisterImgKeeperServer(gRPCServer, &serverAPI{imgKeeper: imgKeeper})
+	imgKeeperv1.RegisterImgKeeperServer(gRPCServer, &serverAPI{
+		imgKeeper:   imgKeeper,
+		FileLimiter: make(chan struct{}, 10),
+		ListLimiter: make(chan struct{}, 100),
+	})
 }
 
 func (s *serverAPI) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error {
+	s.FileLimiter <- struct{}{} //если канал заполнени функция лочится пока не освободится место
 	if err := s.imgKeeper.UploadImg(stream); err != nil {
+		<-s.FileLimiter // освобождаем очередь
 		return err
 	}
+	<-s.FileLimiter // освобождаем очередь
 	return nil
 }
 
