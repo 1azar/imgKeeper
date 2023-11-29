@@ -44,7 +44,6 @@ func New(
 }
 
 func (s ImgKeeper) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error {
-
 	const fn = "service.imgKeeper.imgKeeper.UploadImg"
 	s.log.With(slog.String("fn", fn))
 
@@ -90,8 +89,9 @@ func (s ImgKeeper) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error
 }
 
 func (s ImgKeeper) DownloadImg(req *imgKeeperv1.ImgDownloadReq, steam imgKeeperv1.ImgKeeper_DownloadImgServer) error {
-	//TODO implement me
-	panic("implement me")
+	const fn = "service.imgKeeper.imgKeeper.UploadImg"
+	s.log.With(slog.String("fn", fn))
+
 }
 
 func (s ImgKeeper) ImgList(ctx context.Context, _ *empty.Empty) (*imgKeeperv1.ImgListRes, error) {

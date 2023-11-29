@@ -38,8 +38,14 @@ func (s *serverAPI) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) erro
 	return nil
 }
 
-func (s *serverAPI) DownloadImg(req *imgKeeperv1.ImgDownloadReq, steam imgKeeperv1.ImgKeeper_DownloadImgServer) error {
-	panic("implement me")
+func (s *serverAPI) DownloadImg(req *imgKeeperv1.ImgDownloadReq, stream imgKeeperv1.ImgKeeper_DownloadImgServer) error {
+	s.ListLimiter <- struct{}{}
+	if err := s.DownloadImg(req, stream); err != nil {
+		<-s.ListLimiter
+		return err
+	}
+	<-s.ListLimiter
+	return nil
 }
 
 func (s *serverAPI) ImgList(ctx context.Context, _ *empty.Empty) (*imgKeeperv1.ImgListRes, error) {
