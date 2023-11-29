@@ -5,6 +5,8 @@ import (
 	"imgKeeper/internal/lib/file"
 	"imgKeeper/internal/lib/logger/sl"
 	"io"
+	"log"
+	"os"
 	"path/filepath"
 
 	"context"
@@ -17,12 +19,14 @@ import (
 type FileIndex interface {
 	IndexFile(ctx context.Context,
 		fileName string,
+		filePath string,
 	) (createTime, updateTime time.Time, err error)
 	GetFolder() (path string)
 }
 
 type FileProvider interface {
-	GetFile(ctx context.Context, fileName string) ([]byte, error)
+	//GetFile(ctx context.Context, fileName string) (io.Reader, error)
+	IsFileExist(ctx context.Context, fileName string) (ok bool, path string, err error)
 }
 
 type ImgKeeper struct {
@@ -78,7 +82,7 @@ func (s ImgKeeper) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error
 		}
 	}
 	fileName := filepath.Base(myFile.FilePath)
-	fileCreateDate, fileUpdateDate, err := s.fileIndex.IndexFile(ctxWithTimeout, fileName)
+	fileCreateDate, fileUpdateDate, err := s.fileIndex.IndexFile(ctxWithTimeout, fileName, filepath.Dir(myFile.FilePath))
 	if err != nil {
 		s.log.Error("could not index file: ", err)
 		return err
@@ -88,10 +92,47 @@ func (s ImgKeeper) UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error
 	return stream.SendAndClose(&imgKeeperv1.ImgUploadRes{FileName: fileName, Size: fileSize})
 }
 
-func (s ImgKeeper) DownloadImg(req *imgKeeperv1.ImgDownloadReq, steam imgKeeperv1.ImgKeeper_DownloadImgServer) error {
+func (s ImgKeeper) DownloadImg(req *imgKeeperv1.ImgDownloadReq, stream imgKeeperv1.ImgKeeper_DownloadImgServer) error {
 	const fn = "service.imgKeeper.imgKeeper.UploadImg"
 	s.log.With(slog.String("fn", fn))
 
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer func() {
+		cancel()
+	}()
+
+	ok, fileLocation, err := s.fileProvider.IsFileExist(ctxWithTimeout, req.GetFileName())
+	if err != nil || !ok {
+		s.log.Error("could not locate file: ", err)
+		return err
+	}
+
+	file, err := os.Open(fileLocation)
+	if err != nil {
+		return err
+	}
+	chunkSize := 1024 * 1024
+	buf := make([]byte, chunkSize)
+	batchNumber := 1
+	for {
+		num, err := file.Read(buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		chunk := buf[:num]
+
+		//if err := stream.Send(&uploadpb.FileUploadRequest{FileName: s.filePath, Chunk: chunk}); err != nil {
+		if err := stream.Send(&imgKeeperv1.ImgDownloadRes{FileName: filepath.Base(fileLocation), Chunk: chunk}); err != nil {
+			return err
+		}
+		log.Printf("Sent - batch #%v - size - %v\n", batchNumber, len(chunk))
+		batchNumber += 1
+	}
+
+	return nil
 }
 
 func (s ImgKeeper) ImgList(ctx context.Context, _ *empty.Empty) (*imgKeeperv1.ImgListRes, error) {

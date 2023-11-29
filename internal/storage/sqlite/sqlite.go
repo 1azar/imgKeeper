@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"imgKeeper/internal/storage"
 	"path/filepath"
 	"time"
 
@@ -15,6 +16,7 @@ const (
 	fileNameCol   = "fileName"
 	createDateCol = "createDate"
 	updateDateCol = "updateDate"
+	filePathCol   = "filePath"
 )
 
 type Storage struct {
@@ -34,8 +36,9 @@ func New(storagePath string) (*Storage, error) {
 	CREATE TABLE IF NOT EXISTS %s (
 	    %s TEXT PRIMARY KEY,
 	    %s DATETIME,
-	    %s DATETIME
-	)`, tableName, fileNameCol, createDateCol, updateDateCol)
+	    %s DATETIME,
+	    %s TEXT
+	)`, tableName, fileNameCol, createDateCol, updateDateCol, filePathCol)
 
 	_, err = db.Exec(query)
 	if err != nil {
@@ -58,6 +61,7 @@ func (s *Storage) Stop() error {
 
 func (s *Storage) IndexFile(ctx context.Context,
 	fileName string,
+	fileFolder string,
 ) (createTime, updateTime time.Time, err error) {
 	const fn = "storage.sqlite.IndexFile"
 
@@ -66,12 +70,12 @@ func (s *Storage) IndexFile(ctx context.Context,
 
 	// SQL-запрос для вставки или обновления записи
 	query := fmt.Sprintf(`
-		INSERT OR REPLACE INTO %s (%s, %s, %s)
-		VALUES (?, COALESCE((SELECT %s FROM %s WHERE %s = ?), CURRENT_TIMESTAMP), ?)
-	`, tableName, fileNameCol, createDateCol, updateDateCol, createDateCol, tableName, fileNameCol)
+		INSERT OR REPLACE INTO %s (%s, %s, %s, %s)
+		VALUES (?, COALESCE((SELECT %s FROM %s WHERE %s = ?), CURRENT_TIMESTAMP), ?, ?)
+	`, tableName, fileNameCol, createDateCol, updateDateCol, filePathCol, createDateCol, tableName, fileNameCol)
 
 	// Выполняем запрос
-	_, err = s.db.Exec(query, fileName, fileName, time.Now())
+	_, err = s.db.Exec(query, fileName, fileName, time.Now(), fileFolder)
 
 	if err != nil {
 		return resCreateDate, resUpdateDate, fmt.Errorf("%s : %w", fn, err)
@@ -99,6 +103,36 @@ func (s *Storage) IndexFile(ctx context.Context,
 func (s *Storage) GetFile(ctx context.Context, fileName string) ([]byte, error) {
 
 	return []byte{}, nil // TODO: delete this
+}
+
+func (s *Storage) IsFileExist(ctx context.Context, fileName string) (ok bool, path string, err error) {
+	const fn = "storage.sqlite.IsFileExist"
+
+	var exists int
+	query := fmt.Sprintf("SELECT EXISTS(SELECT 1 FROM %s WHERE %s = ?)", tableName, fileNameCol)
+	err = s.db.QueryRow(query, fileName).Scan(&exists)
+	if err != nil {
+		return false, "", fmt.Errorf("%s: %w", fn, err)
+	}
+
+	if exists != 1 {
+		return false, "", fmt.Errorf("%s: %w", fn, storage.FileDoesNotExist)
+	}
+
+	queryGetRow := fmt.Sprintf("SELECT %s, FROM %s WHERE %s = ?", filePathCol, tableName, fileNameCol)
+	rows, err := s.db.Query(queryGetRow, fileName)
+	if err != nil {
+		return false, "", fmt.Errorf("%s: %w", fn, err)
+	}
+	defer rows.Close()
+	var resFilePath string
+	if rows.Next() {
+		err = rows.Scan(&resFilePath)
+		if err != nil {
+			return false, "", err
+		}
+	}
+	return true, resFilePath, nil
 }
 
 func (s *Storage) GetFolder() (path string) {
