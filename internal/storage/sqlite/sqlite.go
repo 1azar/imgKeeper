@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	imgKeeperv1 "github.com/1azar/imgKeeper-api-contracts/gen/go/imgKeeper"
 	"imgKeeper/internal/storage"
 	"path/filepath"
 	"time"
@@ -137,4 +138,62 @@ func (s *Storage) IsFileExist(ctx context.Context, fileName string) (ok bool, pa
 
 func (s *Storage) GetFolder() (path string) {
 	return s.folderPath
+}
+
+// GetFileList reads all table data -> returns formatted string
+func (s *Storage) GetFileList(ctx context.Context) (data string, err error) {
+	const fn = "storage.sqlite.GetFileList"
+
+	query := fmt.Sprintf("SELECT %s, %s, %s FROM %s", fileNameCol, createDateCol, updateDateCol, tableName)
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return "none", fmt.Errorf("%s: %w", fn, err)
+	}
+	defer rows.Close()
+
+	//var data string
+	for rows.Next() {
+		var fname, cd, ud string
+		if err := rows.Scan(&fname, &cd, &ud); err != nil {
+			return "none", fmt.Errorf("%s: %w", fn, err)
+		}
+
+		data = fmt.Sprintf("%s\t%s\t%s\n", fn, cd, ud)
+	}
+
+	return data, nil
+}
+
+// SendToStream send table data by chunks to stream
+func (s *Storage) SendToStream(stream imgKeeperv1.ImgKeeper_ImgListServer) error {
+	const fn = "storage.sqlite.SendToStream"
+
+	query := fmt.Sprintf("SELECT %s, %s, %s FROM %s", fileNameCol, createDateCol, updateDateCol, tableName)
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return fmt.Errorf("%s: %w", fn, err)
+	}
+	defer rows.Close()
+
+	buf := make([]byte, 1024)
+
+	for rows.Next() {
+		var fname, cdate, udate string
+		if err := rows.Scan(&fname, &cdate, &udate); err != nil {
+			return fmt.Errorf("%s: %w", fn, err)
+		}
+
+		data := fmt.Sprintf("%s\t%s\t%s\n", fname, cdate, udate)
+		copy(buf, []byte(data))
+
+		if err := stream.Send(&imgKeeperv1.ImgListRes{Chunk: buf}); err != nil {
+			return fmt.Errorf("%s: %w", fn, err)
+		}
+
+		// nullify buffer
+		buf = make([]byte, 1024)
+
+	}
+
+	return nil
 }

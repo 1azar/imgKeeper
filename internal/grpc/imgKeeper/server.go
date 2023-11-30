@@ -1,7 +1,6 @@
 package imgKeeper
 
 import (
-	"context"
 	imgKeeperv1 "github.com/1azar/imgKeeper-api-contracts/gen/go/imgKeeper"
 	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
@@ -9,8 +8,8 @@ import (
 
 type ImgKeeper interface {
 	UploadImg(stream imgKeeperv1.ImgKeeper_UploadImgServer) error
-	DownloadImg(req *imgKeeperv1.ImgDownloadReq, steam imgKeeperv1.ImgKeeper_DownloadImgServer) error
-	ImgList(ctx context.Context, _ *empty.Empty) (*imgKeeperv1.ImgListRes, error)
+	DownloadImg(req *imgKeeperv1.ImgDownloadReq, stream imgKeeperv1.ImgKeeper_DownloadImgServer) error
+	ImgList(_ *empty.Empty, stream imgKeeperv1.ImgKeeper_ImgListServer) error
 }
 
 type serverAPI struct {
@@ -48,6 +47,12 @@ func (s *serverAPI) DownloadImg(req *imgKeeperv1.ImgDownloadReq, stream imgKeepe
 	return nil
 }
 
-func (s *serverAPI) ImgList(ctx context.Context, _ *empty.Empty) (*imgKeeperv1.ImgListRes, error) {
-	panic("implement me")
+func (s *serverAPI) ImgList(mt *empty.Empty, stream imgKeeperv1.ImgKeeper_ImgListServer) error {
+	s.ListLimiter <- struct{}{}
+	if err := s.imgKeeper.ImgList(mt, stream); err != nil {
+		<-s.ListLimiter
+		return err
+	}
+	<-s.ListLimiter
+	return nil
 }

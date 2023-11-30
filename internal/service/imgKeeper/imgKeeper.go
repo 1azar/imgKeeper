@@ -21,6 +21,8 @@ type FileIndex interface {
 		filePath string,
 	) (createTime, updateTime time.Time, err error)
 	GetFolder() (path string)
+	GetFileList(ctx context.Context) (data string, err error)
+	SendToStream(stream imgKeeperv1.ImgKeeper_ImgListServer) error
 }
 
 type FileProvider interface {
@@ -134,7 +136,15 @@ func (s ImgKeeper) DownloadImg(req *imgKeeperv1.ImgDownloadReq, stream imgKeeper
 	return nil
 }
 
-func (s ImgKeeper) ImgList(ctx context.Context, _ *empty.Empty) (*imgKeeperv1.ImgListRes, error) {
-	//TODO implement me
-	panic("implement me")
+func (s ImgKeeper) ImgList(_ *empty.Empty, stream imgKeeperv1.ImgKeeper_ImgListServer) error {
+	const fn = "service.imgKeeper.imgKeeper.ImgList"
+	s.log.With(slog.String("fn", fn))
+
+	if err := s.fileIndex.SendToStream(stream); err != nil {
+		s.log.Error("could not send file list to client", err)
+		return err
+	}
+
+	s.log.Debug("file list sent to client")
+	return nil
 }
