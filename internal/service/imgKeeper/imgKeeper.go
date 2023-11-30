@@ -5,7 +5,6 @@ import (
 	"imgKeeper/internal/lib/file"
 	"imgKeeper/internal/lib/logger/sl"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -128,10 +127,10 @@ func (s ImgKeeper) DownloadImg(req *imgKeeperv1.ImgDownloadReq, stream imgKeeper
 		if err := stream.Send(&imgKeeperv1.ImgDownloadRes{FileName: filepath.Base(fileLocation), Chunk: chunk}); err != nil {
 			return err
 		}
-		log.Printf("Sent - batch #%v - size - %v\n", batchNumber, len(chunk))
+		s.log.Debug(fmt.Sprintf("Sent - batch #%v - size - %v", batchNumber, len(chunk)))
 		batchNumber += 1
 	}
-
+	s.log.Debug(fmt.Sprintf("file %s sent", fileLocation))
 	return nil
 }
 

@@ -75,7 +75,7 @@ func (s *Storage) IndexFile(ctx context.Context,
 	`, tableName, fileNameCol, createDateCol, updateDateCol, filePathCol, createDateCol, tableName, fileNameCol)
 
 	// Выполняем запрос
-	_, err = s.db.Exec(query, fileName, fileName, time.Now(), fileFolder)
+	_, err = s.db.Exec(query, fileName, fileName, time.Now(), filepath.Join(fileFolder, fileName))
 
 	if err != nil {
 		return resCreateDate, resUpdateDate, fmt.Errorf("%s : %w", fn, err)
@@ -119,7 +119,7 @@ func (s *Storage) IsFileExist(ctx context.Context, fileName string) (ok bool, pa
 		return false, "", fmt.Errorf("%s: %w", fn, storage.FileDoesNotExist)
 	}
 
-	queryGetRow := fmt.Sprintf("SELECT %s, FROM %s WHERE %s = ?", filePathCol, tableName, fileNameCol)
+	queryGetRow := fmt.Sprintf("SELECT %s FROM %s WHERE %s = ?", filePathCol, tableName, fileNameCol)
 	rows, err := s.db.Query(queryGetRow, fileName)
 	if err != nil {
 		return false, "", fmt.Errorf("%s: %w", fn, err)
